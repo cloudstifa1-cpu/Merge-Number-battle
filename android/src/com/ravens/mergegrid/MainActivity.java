@@ -5,7 +5,7 @@ public class MainActivity extends Activity {
   @Override protected void onCreate(Bundle b){super.onCreate(b);
     getWindow().setStatusBarColor(Color.parseColor("#07070f"));
     w=new WebView(this);w.setBackgroundColor(Color.parseColor("#07070f"));
-    WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(true);
+    WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(true);s.setMediaPlaybackRequiresUserGesture(false);
     setContentView(w);w.loadUrl("file:///android_asset/index.html");}
   @Override public void onBackPressed(){finish();}
 }
