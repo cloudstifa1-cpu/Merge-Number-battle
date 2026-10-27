@@ -122,12 +122,12 @@ function flood(grid,r,c,val,vis){
 function hasMerge(g){const vis=new Set();for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){if(vis.has(r*GS+c))continue;if(flood(g,r,c,g[r][c],vis).length>=3)return true;}return false;}
 function makeGrid(){let g;do{g=Array.from({length:GS},()=>Array.from({length:GS},()=>Math.floor(Math.random()*5)+1));}while(hasMerge(g));return g;}
 
-function mergeOnce(grid,maxN){
+function mergeOnce(grid,maxN,pref){
   const vis=new Set(),merges=[];
   for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){const k=r*GS+c;if(vis.has(k))continue;const v=grid[r][c];if(v===0){vis.add(k);continue;}const grp=flood(grid,r,c,v,vis);if(grp.length>=3)merges.push({v,grp:grp.sort((a,b)=>a[0]-b[0]||a[1]-b[1])});}
   if(!merges.length)return null;
   const ng=grid.map(r=>[...r]);let newMax=maxN,info=[];
-  for(const{v,grp}of merges){const[r0,c0]=grp[0],nv=v+1;ng[r0][c0]=nv;if(nv>newMax)newMax=nv;for(const[rr,cc]of grp)if(rr!==r0||cc!==c0)ng[rr][cc]=0;info.push({nv,grp,winner:[r0,c0]});}
+  for(const{v,grp}of merges){const hit=pref&&grp.find(([a,b])=>a===pref[0]&&b===pref[1]),[r0,c0]=hit||grp[0],nv=v+1;ng[r0][c0]=nv;if(nv>newMax)newMax=nv;for(const[rr,cc]of grp)if(rr!==r0||cc!==c0)ng[rr][cc]=0;info.push({nv,grp,winner:[r0,c0]});}
   return{grid:ng,info,maxN:newMax};
 }
 function gravity(grid){const g=grid.map(r=>[...r]);for(let c=0;c<GS;c++){const s=[];for(let r=0;r<GS;r++)if(g[r][c]!==0)s.push(g[r][c]);for(let r=GS-1;r>=0;r--)g[r][c]=s.length?s.pop():0;}return g;}
@@ -202,7 +202,7 @@ function showPop(txt,cls){const el=document.createElement("div");el.className=cl
 // Sound + vibration
 let AC=null;
 function tone(f,d,type,vol,delay){if(!S.sound)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();o.type=type||"sine";o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(vol||.12,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+.02);}catch(e){}}
-function buzz(ms){if(S.buzz&&navigator.vibrate)try{navigator.vibrate(ms);}catch(e){}}
+function buzz(ms){if(!S.buzz)return;try{if(window.Android&&Android.vibrate)Android.vibrate(ms);else if(navigator.vibrate)navigator.vibrate(ms);}catch(e){}}
 const sfx={
   tap(){tone(520,.07,"square",.05);buzz(10);},
   merge(step){tone(440*Math.pow(1.19,step-1),.2,"triangle",.14);if(step>1)tone(660*Math.pow(1.19,step-1),.2,"triangle",.08,.06);buzz(15+12*step);},
@@ -225,6 +225,7 @@ async function handleClick(r,c,fromCPU){
   let curMax=maxN,pts=0,mergeCount=0,newBest=player.bestTile;
   if(card==='bomb'){sfx.bomb();showPop("BOOM!","callout");}else if(card==='x2')sfx.power();else sfx.tap();
   grid=applyCard(grid,r,c,card,maxN);
+  const pref=hasZero(grid)?null:[r,c]; // merge lands on the tapped tile
   if(hasZero(grid)){
     renderGrid();await w(150);
     const preG=grid.map(r=>[...r]);grid=gravity(grid);
@@ -237,7 +238,7 @@ async function handleClick(r,c,fromCPU){
   renderGrid();await w(90);
   let step=0;
   while(true){
-    const res=mergeOnce(grid,curMax);if(!res)break;step++;
+    const res=mergeOnce(grid,curMax,step===0?pref:null);if(!res)break;step++;
     const mKeys=new Set(),wKeys=new Set();
     for(const{grp,winner}of res.info){for(const[rr,cc]of grp)mKeys.add(rr*GS+cc);wKeys.add(winner[0]*GS+winner[1]);}
     renderGrid(mKeys,null);await w(320);
@@ -278,8 +279,8 @@ function undo(){
 // Computer player
 function evalMove(g0,r,c,card,mx){
   let g=applyCard(g0,r,c,card,mx),pts=0,best=0,n=0,step=0;
-  if(hasZero(g))g=gravity(g);
-  for(;;){const res=mergeOnce(g,mx);if(!res)break;step++;
+  const pref=hasZero(g)?null:[r,c];if(pref===null)g=gravity(g);
+  for(;;){const res=mergeOnce(g,mx,step===0?pref:null);if(!res)break;step++;
     for(const{nv,grp}of res.info){pts+=scoreMerge(nv,grp.length,step);n++;if(nv>best)best=nv;}
     mx=res.maxN;g=gravity(res.grid);}
   return pts+n*25+best*(S.winBy==='tile'?60:15);
@@ -293,7 +294,7 @@ async function cpuMove(){
   const any=n=>opts[Math.floor(Math.random()*Math.min(n,opts.length))];
   let pick=opts[0];
   if(gameDiff==='medium')pick=any(3);
-  if(gameDiff==='easy')pick=Math.random()<.5?any(opts.length):any(6);
+  if(gameDiff==='easy'){const m=opts.filter(o=>o.s>20);pick=m.length&&(players[1].tiles.length<=2||Math.random()<.55)?m[m.length-1-Math.floor(Math.random()*Math.ceil(m.length/2))]:any(opts.length);} // easy: weakest merges, so it keeps earning cards
   const cell=document.getElementById("grid").children[pick.r*GS+pick.c];if(cell)cell.style.outline="3px solid #fff";
   await sleep(350);if(my!==gen)return;
   handleClick(pick.r,pick.c,true);
