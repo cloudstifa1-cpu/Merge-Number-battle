@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="theme-color" content="#07070f"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <link rel="manifest" href="manifest.json"/>
+  <title>Merge Grid</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#07070f;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;font-family:'Orbitron','Courier New',monospace;}
+    #root{min-height:100dvh;background:radial-gradient(ellipse at 20% 20%,#1a0030 0%,#07070f 40%,#000b1a 100%);display:flex;flex-direction:column;align-items:center;padding:12px;user-select:none;touch-action:manipulation;}
+    .header{width:100%;max-width:380px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-top:4px;}
+    h1{font-size:22px;font-weight:900;letter-spacing:.15em;background:linear-gradient(90deg,#FF3CAC,#00D4FF,#3BFF73);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .maxlabel{font-size:10px;color:#ffffffcc;letter-spacing:.2em;}
+    .players{display:flex;gap:8px;width:100%;max-width:380px;margin-bottom:14px;}
+    .player{flex:1;border-radius:14px;padding:10px 12px;transition:all .3s;}
+    .player.active{background:linear-gradient(135deg,rgba(0,212,255,.12),rgba(120,77,255,.12));border:1.5px solid #00D4FF33;box-shadow:0 0 24px rgba(0,212,255,.1);}
+    .player.inactive{background:rgba(255,255,255,.03);border:1.5px solid #ffffff0f;}
+    .phead{display:flex;justify-content:space-between;align-items:baseline;}
+    .pname{font-size:11px;letter-spacing:.12em;}
+    .active .pname{color:#00D4FF;}.inactive .pname{color:#ffffffcc;}
+    .pbest{font-size:9px;color:#ffffffcc;letter-spacing:.1em;}
+    .pscore{font-size:28px;font-weight:900;line-height:1.1;margin-top:2px;}
+    .active .pscore{color:#fff;text-shadow:0 0 20px rgba(0,212,255,.5);}.inactive .pscore{color:#ffffffdd;}
+    .hand{display:flex;gap:3px;margin-top:8px;flex-wrap:wrap;}
+    .htile{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:-.02em;}
+    .htile.next{animation:pulse 1.4s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+    .grid-wrap{padding:10px;border-radius:18px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06);box-shadow:0 20px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);position:relative;overflow:hidden;}
+    .grid-dots{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;}
+    .grid{display:grid;grid-template-columns:repeat(5,64px);gap:6px;position:relative;}
+    .cell{width:64px;height:64px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;letter-spacing:-.02em;cursor:pointer;position:relative;overflow:hidden;}
+    .cell .shine{position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.18) 0%,transparent 100%);border-radius:12px 12px 0 0;pointer-events:none;}
+    .cell:active{transform:scale(.93);}
+
+    /* Merge: losers shrink to nothing */
+    .cell.merging{animation:mergeShrink .32s ease-in forwards;pointer-events:none;}
+    @keyframes mergeShrink{0%{transform:scale(1);opacity:1;filter:brightness(1.5);}50%{transform:scale(1.15);filter:brightness(2);}100%{transform:scale(0);opacity:0;}}
+
+    /* Merge: winner pops in with new value */
+    .cell.merge-winner{animation:mergeWin .4s cubic-bezier(.17,.67,.35,1.5) forwards;}
+    @keyframes mergeWin{0%{transform:scale(0);opacity:0;filter:brightness(3);}55%{transform:scale(1.4);filter:brightness(2);}80%{transform:scale(0.9);}100%{transform:scale(1);opacity:1;filter:brightness(1);}}
+
+    /* New tiles fall from top */
+    .cell.falling{animation:fallIn .42s cubic-bezier(.4,0,.2,1) forwards;}
+    @keyframes fallIn{from{transform:translateY(-320px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+    /* Existing tiles slide down after collapse */
+    .cell.dropping{animation:dropDown .22s ease-out forwards;}
+    @keyframes dropDown{from{transform:translateY(-70px);}to{transform:translateY(0);}}
+
+    .hint{margin-top:12px;text-align:center;min-height:50px;font-size:11px;color:#ffffffdd;letter-spacing:.1em;}
+    .modval{font-weight:900;}
+    .restart-btn{margin-top:8px;padding:6px 18px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,.5);color:#ffffffdd;font-size:10px;cursor:pointer;letter-spacing:.12em;text-transform:uppercase;font-family:'Orbitron',monospace;}
+    .gameover-title{font-size:20px;font-weight:900;letter-spacing:.1em;background:linear-gradient(90deg,#3BFF73,#00D4FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .gameover-scores{font-size:11px;color:#ffffffdd;margin-top:4px;letter-spacing:.08em;}
+    .play-again{margin-top:12px;padding:10px 32px;border-radius:10px;background:linear-gradient(135deg,rgba(255,60,172,.22),rgba(0,212,255,.22));border:1.5px solid #00D4FF88;color:#00D4FF;font-size:12px;font-weight:700;letter-spacing:.15em;cursor:pointer;text-transform:uppercase;font-family:'Orbitron',monospace;box-shadow:0 0 20px rgba(0,212,255,.2);}
+    .score-pop{position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);font-size:52px;font-weight:900;color:#FFD23F;font-family:'Orbitron',monospace;text-shadow:0 0 30px #FFD23F,0 0 60px #FF9500;animation:scorePop 1.1s ease-out forwards;pointer-events:none;z-index:999;}
+    @keyframes scorePop{0%{opacity:1;transform:translate(-50%,-50%) scale(1);}40%{opacity:1;transform:translate(-50%,-85%) scale(1.35);}100%{opacity:0;transform:translate(-50%,-130%) scale(.7);}}
+    #modes{position:fixed;inset:0;background:rgba(3,3,10,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:50;}
+    #modes h2{font-size:26px;font-weight:900;color:#fff;letter-spacing:.15em;margin-bottom:10px;text-shadow:0 0 18px #00D4FF;}
+    #modes button{width:250px;padding:18px;border-radius:14px;font-family:'Orbitron',monospace;font-size:15px;font-weight:700;letter-spacing:.1em;cursor:pointer;background:#00D4FF22;border:2px solid #00D4FF;color:#fff;box-shadow:0 0 14px #00D4FF66;}
+    #modes button.p2{background:#FF3CAC22;border-color:#FF3CAC;box-shadow:0 0 14px #FF3CAC66;}
+    #modes .sub{font-size:11px;color:#ffffffcc;letter-spacing:.08em;margin-top:6px;}
+  </style>
+</head>
+<body>
+<div id="root">
+  <div class="header"><h1>MERGE GRID</h1><div class="maxlabel" id="maxlabel">MAX 5</div></div>
+  <div class="players" id="players"></div>
+  <div class="grid-wrap"><div class="grid-dots"></div><div class="grid" id="grid"></div></div>
+  <div class="hint" id="hint"></div>
+</div>
+<div id="modes"><h2>MERGE GRID</h2><button onclick="startGame(1)">1 PLAYER<div class="sub">YOU vs COMPUTER</div></button><button class="p2" onclick="startGame(2)">2 PLAYERS<div class="sub">PASS THE PHONE</div></button></div>
+<script>
+const GS=5,HS=6;
+const PAL={0:{bg:"#111122",glow:"transparent",text:"#222244"},1:{bg:"#FF3CAC",glow:"#FF3CAC",text:"#fff"},2:{bg:"#FF6B35",glow:"#FF6B35",text:"#fff"},3:{bg:"#FFD23F",glow:"#FFD23F",text:"#1a1a00"},4:{bg:"#3BFF73",glow:"#3BFF73",text:"#001a00"},5:{bg:"#00D4FF",glow:"#00D4FF",text:"#001a22"},6:{bg:"#784DFF",glow:"#784DFF",text:"#fff"},7:{bg:"#FF4D6D",glow:"#FF4D6D",text:"#fff"},8:{bg:"#FF9500",glow:"#FF9500",text:"#1a0800"},9:{bg:"#00FFD1",glow:"#00FFD1",text:"#001a13"},10:{bg:"#E040FB",glow:"#E040FB",text:"#fff"}};
+const MC={"+2":"#00D4FF","+1":"#3BFF73","-1":"#FF6B35","-2":"#FF3CAC"};
+function gp(v){return PAL[Math.min(v,10)]||PAL[10];}
+function ml(m){return m>0?"+"+m:""+m;}
+function randMod(){const p=Math.random()*100;if(p<50)return 1;if(p<70)return -1;if(p<85)return 2;return -2;}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function flood(grid,r,c,val,vis){
+  const stack=[[r,c]],grp=[];
+  while(stack.length){const[rr,cc]=stack.pop(),k=rr*GS+cc;if(vis.has(k))continue;vis.add(k);grp.push([rr,cc]);for(const[dr,dc]of[[1,0],[-1,0],[0,1],[0,-1]]){const nr=rr+dr,nc=cc+dc;if(nr>=0&&nr<GS&&nc>=0&&nc<GS&&grid[nr][nc]===val&&!vis.has(nr*GS+nc))stack.push([nr,nc]);}}
+  return grp;
+}
+function hasMerge(g){const vis=new Set();for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){if(vis.has(r*GS+c))continue;if(flood(g,r,c,g[r][c],vis).length>=3)return true;}return false;}
+function makeGrid(){let g;do{g=Array.from({length:GS},()=>Array.from({length:GS},()=>Math.floor(Math.random()*5)+1));}while(hasMerge(g));return g;}
+
+function mergeOnce(grid,maxN){
+  const vis=new Set(),merges=[];
+  for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){const k=r*GS+c;if(vis.has(k))continue;const v=grid[r][c];if(v===0){vis.add(k);continue;}const grp=flood(grid,r,c,v,vis);if(grp.length>=3)merges.push({v,grp:grp.sort((a,b)=>a[0]-b[0]||a[1]-b[1])});}
+  if(!merges.length)return null;
+  const ng=grid.map(r=>[...r]);let newMax=maxN,info=[];
+  for(const{v,grp}of merges){const[r0,c0]=grp[0],nv=v+1;ng[r0][c0]=nv;if(nv>newMax)newMax=nv;for(const[rr,cc]of grp)if(rr!==r0||cc!==c0)ng[rr][cc]=0;info.push({nv,grp,winner:[r0,c0]});}
+  return{grid:ng,info,maxN:newMax};
+}
+function gravity(grid){const g=grid.map(r=>[...r]);for(let c=0;c<GS;c++){const s=[];for(let r=0;r<GS;r++)if(g[r][c]!==0)s.push(g[r][c]);for(let r=GS-1;r>=0;r--)g[r][c]=s.length?s.pop():0;}return g;}
+function refill(grid,maxN){const ng=grid.map(r=>[...r]),sp=new Set();for(let r=0;r<GS;r++)for(let c=0;c<GS;c++)if(ng[r][c]===0){ng[r][c]=Math.floor(Math.random()*maxN)+1;sp.add(r*GS+c);}return{grid:ng,spawned:sp};}
+function scoreFor(nv,sz){return nv*sz*10;}
+
+let grid=makeGrid(),maxN=5,turn=0,busy=false,gameOver=false,mode=2;
+function isCPU(){return mode===1&&turn%2===1&&!gameOver;}
+let players=[{name:"P1",score:0,tiles:Array.from({length:HS},randMod),bestTile:0},{name:"P2",score:0,tiles:Array.from({length:HS},randMod),bestTile:0}];
+
+function buildCell(v,cls,clickable,r,c){
+  const pal=gp(v),div=document.createElement("div");
+  div.className="cell"+(cls?" "+cls:"");
+  div.style.cssText=`background:${v===0?"rgba(255,255,255,.03)":pal.bg};border:1px solid ${v===0?"rgba(255,255,255,.05)":pal.glow+"44"};color:${v===0?"transparent":pal.text};box-shadow:${v>0?`0 0 14px ${pal.glow}77,0 2px 8px rgba(0,0,0,.5)`:"none"};font-size:${v>=10?"18px":"22px"};`;
+  if(v>0){const sh=document.createElement("div");sh.className="shine";div.appendChild(sh);div.appendChild(document.createTextNode(v));}
+  if(clickable&&v>0)div.addEventListener("click",()=>handleClick(r,c));
+  return div;
+}
+
+function renderGrid(mergeKeys=null,winKeys=null,fallingKeys=null,dropKeys=null){
+  const el=document.getElementById("grid");el.innerHTML="";
+  const ok=!busy&&!gameOver&&!isCPU();
+  for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){
+    const v=grid[r][c],k=r*GS+c;
+    let cls="";
+    if(mergeKeys&&mergeKeys.has(k)&&!(winKeys&&winKeys.has(k)))cls="merging";
+    else if(winKeys&&winKeys.has(k))cls="merge-winner";
+    else if(fallingKeys&&fallingKeys.has(k))cls="falling";
+    else if(dropKeys&&dropKeys.has(k))cls="dropping";
+    el.appendChild(buildCell(v,cls,ok,r,c));
+  }
+}
+
+function renderPlayers(){
+  document.getElementById("players").innerHTML=players.map((p,i)=>{
+    const a=i===(turn%2)&&!gameOver;
+    const th=p.tiles.map((t,ti)=>{const mc=MC[ml(t)]||"#fff",nx=ti===0&&a;return`<div class="htile${nx?" next":""}" style="background:${nx?mc+"22":"rgba(255,255,255,.04)"};border:1.5px solid ${nx?mc:"rgba(255,255,255,.08)"};color:${nx?mc:"#ffffffbb"};box-shadow:${nx?`0 0 8px ${mc}88`:"none"};">${ml(t)}</div>`;}).join("");
+    return`<div class="player ${a?"active":"inactive"}"><div class="phead"><span class="pname">${p.name}${a?" ▶":""}</span><span class="pbest">BEST ${p.bestTile}</span></div><div class="pscore">${p.score.toLocaleString()}</div><div class="hand">${th}${!p.tiles.length?'<span style="font-size:10px;color:#ffffffbb">empty</span>':""}</div></div>`;
+  }).join("");
+}
+
+function renderHint(){
+  const el=document.getElementById("hint"),p=players[turn%2];
+  if(gameOver){
+    const[a,b]=players,w=a.bestTile>b.bestTile?a.name:b.bestTile>a.bestTile?b.name:a.score>b.score?a.name:b.score>a.score?b.name:"Tie";
+    el.innerHTML=`<div><div class="gameover-title">${w==="Tie"?"🤝 TIE":(w==="YOU"?"🏆 YOU WIN":"🏆 "+w+" WINS")}</div><div class="gameover-scores">${players[0].name} ${players[0].score.toLocaleString()} | ${players[1].name} ${players[1].score.toLocaleString()}</div><button class="play-again" onclick="restart()">PLAY AGAIN</button></div>`;
+  } else {
+    const m=p.tiles[0],mc=m!=null?(MC[ml(m)]||"#fff"):"#fff";
+    el.innerHTML=p.tiles.length?`${isCPU()?"computer is thinking… ":"tap a cell to play "}<span class="modval" style="color:${mc};text-shadow:0 0 8px ${mc}">${ml(m)}</span><br/><button class="restart-btn" onclick="restart()">restart</button>`:`no tiles<br/><button class="restart-btn" onclick="restart()">restart</button>`;
+  }
+  document.getElementById("maxlabel").textContent="MAX "+maxN;
+}
+
+function showPop(pts){const el=document.createElement("div");el.className="score-pop";el.textContent="+"+pts;document.body.appendChild(el);setTimeout(()=>el.remove(),1100);}
+
+async function handleClick(r,c,fromCPU){
+  if(busy||gameOver)return;
+  if(isCPU()&&!fromCPU)return;
+  const ci=turn%2,player=players[ci];
+  if(!player.tiles.length)return;
+  busy=true;
+  const mod=player.tiles[0];
+  let curMax=maxN,pts=0,mergeCount=0,newBest=player.bestTile;
+
+  // Apply modifier — if result < 1 set to 0
+  const nv=grid[r][c]+mod;
+  grid[r][c]=nv<1?0:nv;
+
+  // Immediately collapse if zero, then refill from top
+  if(grid[r][c]===0){
+    const preG=grid.map(r=>[...r]);
+    grid=gravity(grid);
+    // Mark cells that slid down
+    const dropK=new Set();
+    for(let col=0;col<GS;col++)for(let row=0;row<GS;row++)if(grid[row][col]!==0&&preG[row][col]===0)dropK.add(row*GS+col);
+    renderGrid(null,null,null,dropK);
+    await sleep(260);
+    // Now refill the empty top slots with falling tiles
+    const{grid:filled,spawned}=refill(grid,curMax);
+    grid=filled;
+    renderGrid(null,null,spawned);
+    await sleep(440);
+  }
+  renderGrid();
+  await sleep(90);
+
+  // Cascade
+  while(true){
+    const res=mergeOnce(grid,curMax);
+    if(!res)break;
+    const mKeys=new Set(),wKeys=new Set();
+    for(const{grp,winner}of res.info){for(const[rr,cc]of grp)mKeys.add(rr*GS+cc);wKeys.add(winner[0]*GS+winner[1]);}
+
+    // Show losers shrinking
+    renderGrid(mKeys,null);
+    await sleep(320);
+
+    // Apply & show winner popping
+    for(const{nv,grp}of res.info){pts+=scoreFor(nv,grp.length);mergeCount++;if(nv>newBest)newBest=nv;}
+    curMax=res.maxN;grid=res.grid;
+    renderGrid(null,wKeys);
+    await sleep(380);
+
+    // Gravity
+    const preG=grid.map(r=>[...r]);
+    grid=gravity(grid);
+    const dropK=new Set();
+    for(let col=0;col<GS;col++)for(let row=0;row<GS;row++)if(grid[row][col]!==0&&preG[row][col]===0)dropK.add(row*GS+col);
+    renderGrid(null,null,null,dropK);
+    await sleep(260);
+
+    // Refill with falling tiles
+    const{grid:filled,spawned}=refill(grid,curMax);
+    grid=filled;
+    renderGrid(null,null,spawned);
+    await sleep(440);
+    renderGrid();
+    await sleep(80);
+  }
+
+  if(pts>0)showPop(pts);
+  maxN=curMax;
+  players=players.map((p,i)=>{
+    if(i!==ci)return p;
+    const t=p.tiles.slice(1);
+    for(let k=0;k<mergeCount&&t.length<HS;k++)t.push(randMod());
+    return{...p,score:p.score+pts,tiles:t,bestTile:newBest};
+  });
+  const ot=1-ci;
+  if(!players[ci].tiles.length&&!players[ot].tiles.length)gameOver=true;
+  else{turn++;if(!players[turn%2].tiles.length)turn++;}
+  busy=false;
+  renderPlayers();renderGrid();renderHint();
+  if(isCPU())cpuMove();
+}
+
+function restart(){document.getElementById("modes").style.display="flex";}
+function startGame(m){
+  mode=m;grid=makeGrid();maxN=5;turn=0;busy=false;gameOver=false;
+  const n=m===1?["YOU","CPU"]:["P1","P2"];
+  players=n.map(name=>({name,score:0,tiles:Array.from({length:HS},randMod),bestTile:0}));
+  document.getElementById("modes").style.display="none";
+  renderPlayers();renderGrid();renderHint();
+}
+
+// Computer player: tries every cell, plays out the merges it can see, picks the best
+function evalMove(g,r,c,mod,mx){
+  g=g.map(x=>[...x]);const v=g[r][c]+mod;g[r][c]=v<1?0:v;
+  let pts=0,best=0,n=0;
+  if(g[r][c]===0)g=gravity(g);
+  for(;;){const res=mergeOnce(g,mx);if(!res)break;
+    for(const{nv,grp}of res.info){pts+=scoreFor(nv,grp.length);n++;if(nv>best)best=nv;}
+    mx=res.maxN;g=gravity(res.grid);}
+  return pts+n*25+best*15;
+}
+async function cpuMove(){
+  await sleep(700);
+  if(!isCPU()||busy)return;
+  const mod=players[1].tiles[0];let top=-1,picks=[];
+  for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){if(!grid[r][c])continue;
+    const s=evalMove(grid,r,c,mod,maxN)+Math.random()*5;
+    if(s>top+0.001){top=s;picks=[[r,c]];}}
+  const[r,c]=picks[0];
+  const cells=document.getElementById("grid").children;cells[r*GS+c].style.outline="3px solid #fff";
+  await sleep(350);
+  handleClick(r,c,true);
+}
+
+renderPlayers();renderGrid();renderHint();
+</script>
+</body>
+</html>
